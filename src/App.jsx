@@ -59,12 +59,12 @@ const App = () => {
 
   return (
     <>
-      <div className='tracking-tighter mt-20 grid justify-center items-center'>
-        <h1 className='text-[6vw] '>LeetCode to GitHub</h1>
-        <p className='grid text-muted-foreground justify-center items-center'>Push your Leetcode Solutions directly to your Github repository.</p>
+      <div className='tracking-tighter mt-20 grid justify-center items-center text-center sm:text-centre'>
+        <h1 className='start text-[6vw] '>LeetCode to GitHub</h1>
+        <p className='start grid text-muted-foreground justify-center items-center'>Push your Leetcode Solutions directly to your Github repository.</p>
       </div>
-      <div className="text-xl max-w-full mt-4 p-10 border-spacing-0 grid items-center">
-        <div className='grid mb-2 w-1/2'>
+      <div className="text-xl mt-4 p-10 border-spacing-0 grid items-center">
+        <div className='grid mb-2 sm:w-full md:w-full lg:w-1/2'>
           <label className='bold hover:text-blue-500'><a href="https://www.geeksforgeeks.org/how-to-generate-personal-access-token-in-github/">GitHub Personal Access Token: </a></label>
           <input
             className='h-10 w-full px-3 py-3 my-2 rounded-xl outline outline-offset-0 text-black'
@@ -74,50 +74,50 @@ const App = () => {
             onChange={handleTokenChange}
           />
         </div>
-        <div className="grid mb-2 w-1/2">
+        <div className="grid mb-2 sm:w-full md:w-full lg:w-1/2">
           <label className='bold'>Enter Github Username: </label>
           <input
-            className='h-10 w-full rounded-xl px-3 py-3 my-2 text-base outline outline-offset-0 text-black'
+            className='h-10 w-full rounded-xl px-3 py-3 my-2 outline outline-offset-0 text-black'
             type="text"
             placeholder='Enter your Github Username'
             value={repoOwner}
             onChange={(e) => setRepoOwner(e.target.value)}
           />
         </div>
-        <div className="grid mb-2 w-1/2">
+        <div className="grid mb-2 sm:w-full md:w-full lg:w-1/2">
           <label className='bold'>Repository Name:</label>
           <input
-            className='h-10 w-full rounded-xl px-3 py-3 my-2 text-base outline outline-offset-0 text-black'
+            className='h-10 w-full rounded-xl px-3 py-3 my-2 outline outline-offset-0 text-black'
             placeholder='Enter your Github Repository Name'
             type="text"
             value={repoName}
             onChange={(e) => setRepoName(e.target.value)}
           />
         </div>
-        <div className="grid mb-2 w-1/2">
+        <div className="grid mb-2 sm:w-full md:w-full lg:w-1/2">
           <label>File Path (e.g., solutions/solution1.java):</label>
           <input
-            className='h-10 rounded-xl px-3 py-3 my-2 text-base outline outline-offset-0 text-black'
+            className='h-10 rounded-xl px-3 py-3 my-2 outline outline-offset-0 text-black'
             placeholder='Enter your file path from Repository (solutions/solutions.java)'
             type="text"
             value={filePath}
             onChange={(e) => setFilePath(e.target.value)}
           />
         </div>
-        <div className="grid mb-2 w-1/2">
+        <div className="grid mb-2 sm:w-full md:w-full lg:w-1/2">
           <label className='bold'>Commit Message:</label>
           <input
-            className='h-10 w-full rounded-xl px-3 py-3 my-2 text-base outline outline-offset-0 text-black'
+            className='h-10 w-full rounded-xl px-3 py-3 my-2 outline outline-offset-0 text-black'
             placeholder='Enter your Commit Message'
             type="text"
             value={commitMessage}
             onChange={(e) => setCommitMessage(e.target.value)}
           />
         </div>
-        <div className="grid mb-2">
+        <div className="grid mb-2 sm:w-full md:w-full lg:w-1/2">
           <label className='bold'>File Content:</label>
           <textarea
-            className='h-80 w-full rounded-xl px-3 py-3 my-2 text-base outline outline-offset-0 text-black'
+            className='h-80 w-full rounded-xl px-3 py-3 my-2 outline outline-offset-0 text-black'
             placeholder='Enter your Code/Text'
             value={fileContent}
             onChange={(e) => setFileContent(e.target.value)}
