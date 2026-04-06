@@ -16,6 +16,12 @@ const App = () => {
   const [existingCode, setExistingCode] = useState('');
   const [stagedSha, setStagedSha] = useState(null);
 
+  // New states for Dual-Push
+  const [slugName, setSlugName] = useState('');
+  const [questionDescription, setQuestionDescription] = useState('');
+  const [isFetchingDesc, setIsFetchingDesc] = useState(false);
+  const [readmeSha, setReadmeSha] = useState(null);
+
   useEffect(() => {
     const savedToken = localStorage.getItem('githubToken');
     const savedOwner = localStorage.getItem('githubOwner');
@@ -69,7 +75,7 @@ const App = () => {
     localStorage.setItem('githubRepo', e.target.value);
   };
 
-  const handleUrlChange = (e) => {
+  const handleUrlChange = async (e) => {
     const url = e.target.value;
     setLeetCodeUrl(url);
     
@@ -77,12 +83,25 @@ const App = () => {
     const match = url.match(/leetcode\.com\/problems\/([^/]+)/);
     if (match && match[1]) {
       const slug = match[1];
-      if (!commitMessage) setCommitMessage(`feat: add solution for ${slug}`);
-      if (!filePath) setFilePath(slug);
+      setSlugName(slug);
       
-      if (!fileContent.includes(url)) {
-        setFileContent(`// Problem: ${url}\n\n${fileContent}`);
+      if (!commitMessage) setCommitMessage(`added solution for ${slug}`);
+      setFilePath(`${slug}/solution`);
+      
+      // Fetch Problem Description from Alfa-Leetcode-API
+      setIsFetchingDesc(true);
+      try {
+        const res = await fetch(`https://alfa-leetcode-api.onrender.com/select?titleSlug=${slug}`);
+        if (res.ok) {
+          const data = await res.json();
+          setQuestionDescription(`<h2><a href="${url}">${slug}</a></h2>\n\n${data.question || data.content || "*Description missing*"}`);
+        } else {
+          setQuestionDescription(`# ${slug}\n\n**Problem Link:** ${url}\n\n*API limit reached. Failed to fetch full description automatically.*`);
+        }
+      } catch (err) {
+        setQuestionDescription(`# ${slug}\n\n**Problem Link:** ${url}\n\n*Failed to fetch description.*`);
       }
+      setIsFetchingDesc(false);
     }
   };
 
@@ -93,10 +112,10 @@ const App = () => {
     const contentToTest = fileContent.toLowerCase();
     
     // Basic heuristics to determine the extension from code syntax
-    if (contentToTest.includes('public class ') || (contentToTest.includes('class solution') && contentToTest.includes('public'))) ext = '.java';
-    else if (contentToTest.includes('def ') || contentToTest.includes('class solution:')) ext = '.py';
+    if (contentToTest.includes('def ') || contentToTest.includes('class solution:')) ext = '.py';
+    else if (contentToTest.includes('#include') || contentToTest.includes('using namespace std') || contentToTest.includes('public:') || contentToTest.includes('vector<')) ext = '.cpp';
+    else if (contentToTest.includes('public class ') || (contentToTest.includes('class solution') && contentToTest.includes('public ') && !contentToTest.includes('public:'))) ext = '.java';
     else if (contentToTest.includes('function ') || contentToTest.includes('const ') || contentToTest.includes('let ')) ext = '.js';
-    else if (contentToTest.includes('#include') || contentToTest.includes('using namespace std')) ext = '.cpp';
     else if (contentToTest.includes('package main') || contentToTest.includes('func ')) ext = '.go';
     else if (contentToTest.includes('impl solution') || contentToTest.includes('fn ')) ext = '.rs';
     
@@ -122,6 +141,23 @@ const App = () => {
         'Content-Type': 'application/json',
       };
       
+      // 1. Push the README.md first (if we have a slug and parsed description)
+      if (slugName && questionDescription) {
+        const readmePath = `${slugName}/README.md`;
+        const readmeBody = {
+          message: commitMessage,
+          content: btoa(unescape(encodeURIComponent(questionDescription))),
+        };
+        // Add SHA if it exists so we overwrite properly without error
+        if (readmeSha) readmeBody.sha = readmeSha;
+        
+        await fetch(
+          `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${readmePath}`,
+          { method: 'PUT', headers, body: JSON.stringify(readmeBody) }
+        );
+      }
+
+      // 2. Push the target code file
       const body = {
         message: commitMessage,
         content: btoa(unescape(encodeURIComponent(fileContent))),
@@ -137,6 +173,8 @@ const App = () => {
         setStatus('success');
         setStagedSha(null);
         setExistingCode('');
+        
+        // Minor reset to allow immediate next push
         setTimeout(() => setStatus('idle'), 3000);
       } else {
         const err = await res.json();
@@ -162,8 +200,10 @@ const App = () => {
         Accept: 'application/vnd.github+json',
       };
 
-      let sha = null;
+      let codeSha = null;
       let existingText = '';
+      
+      // Check existing Solution File
       try {
         const checkRes = await fetch(
           `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${filePath}`,
@@ -171,16 +211,34 @@ const App = () => {
         );
         if (checkRes.ok) {
           const existing = await checkRes.json();
-          sha = existing.sha;
+          codeSha = existing.sha;
           existingText = decodeURIComponent(escape(atob(existing.content)));
         }
       } catch (_) { }
 
-      if (sha) {
-        setStagedSha(sha);
+      // Check existing README.md File to grab its SHA (silently)
+      let rSha = null;
+      if (slugName && questionDescription) {
+        try {
+          const checkReadmeRes = await fetch(
+            `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${slugName}/README.md`,
+            { headers }
+          );
+          if (checkReadmeRes.ok) {
+            const existingReadme = await checkReadmeRes.json();
+            rSha = existingReadme.sha;
+          }
+        } catch (_) {}
+      }
+      setReadmeSha(rSha);
+
+      // Trigger Diff Viewer if Code File exists
+      if (codeSha) {
+        setStagedSha(codeSha);
         setExistingCode(existingText);
         setStatus('confirming');
       } else {
+        // Direct Push for both files
         await confirmPush();
       }
     } catch (e) {
@@ -251,15 +309,15 @@ const App = () => {
               </span>
             </h1>
             <p className="text-stone-400 text-lg leading-relaxed mb-6">
-              Stop context switching. Push your DSA solutions and competitive programming answers directly to your repositories in seconds.
+              Stop context switching. Push your DSA solutions and automatically scrape problem descriptions directly into your repositories.
             </p>
           </div>
 
           <div className="space-y-5">
             {[
               { title: 'Zero Friction', desc: 'No need to clone repos, stage changes, or write terminal commands.' },
-              { title: 'Smart Parsing', desc: 'Pasting a LeetCode URL auto-fills your fields and tags the file.' },
-              { title: 'Rich Highlight', desc: 'Syntax highlighting detects Java, Python, TS, and more.' }
+              { title: 'Dual Push', desc: 'Saves your code as a Solution file, and generates the Problem README alongside it.' },
+              { title: 'Smart Parsing', desc: 'Pasting a LeetCode URL auto-fills your fields and scrapes LeetCode data.' }
             ].map((feature, i) => (
               <div key={i} className="flex gap-4 group">
                 <div className="mt-1 flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/20 transition-colors">
@@ -280,8 +338,8 @@ const App = () => {
             <div className="glass-panel text-white rounded-3xl p-8 lg:p-10 shadow-emerald-500/5 relative">
               <div className="absolute top-0 left-10 right-10 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent opacity-50" />
               
-              <h2 className="text-2xl font-semibold mb-2 text-amber-400">File Already Exists</h2>
-              <p className="text-sm text-stone-400 mb-6">You are about to overwrite <strong className="text-stone-200">{filePath}</strong>. Please review the changes below.</p>
+              <h2 className="text-2xl font-semibold mb-2 text-amber-400">Solution File Exists</h2>
+              <p className="text-sm text-stone-400 mb-6">You are about to overwrite <strong className="text-stone-200">{filePath}</strong>. Please review the changes below. <br/>*(The generated README.md will update silently).*</p>
               
               <div className="rounded-xl overflow-hidden mb-8 border border-white/10 custom-scrollbar overflow-x-auto">
                 <div className="diff-viewer bg-[#0d1117] pt-4">
@@ -389,7 +447,15 @@ const App = () => {
 
               <div className="mb-5 relative">
                 <label className="flex items-center justify-between text-sm font-medium text-stone-400 mb-2">
-                  <span>LeetCode URL <span className="ml-2 text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded tracking-wide uppercase">Auto-fills</span></span>
+                  <span>LeetCode URL 
+                    {isFetchingDesc ? (
+                      <span className="ml-2 text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)] px-2 py-0.5 rounded tracking-wide uppercase animate-pulse">Extracting Problem...</span>
+                    ) : (questionDescription ? (
+                      <span className="ml-2 text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded tracking-wide uppercase">Question Prepped!</span>
+                     ) : (
+                      <span className="ml-2 text-[10px] bg-white/10 px-2 py-0.5 rounded text-stone-300">Auto-fills</span>
+                    ))}
+                  </span>
                 </label>
                 <input
                   type="text"
@@ -402,7 +468,7 @@ const App = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
                 <div className="sm:col-span-1">
-                  <label className="block text-sm font-medium text-stone-400 mb-2">File Path</label>
+                  <label className="block text-sm font-medium text-stone-400 mb-2">Code File Path</label>
                   <input
                     type="text"
                     placeholder="two-sum.js"
@@ -429,7 +495,7 @@ const App = () => {
                   <span>Solution Code</span>
                 </label>
                 <div className="relative group overflow-hidden rounded-xl border border-white/10 focus-within:border-emerald-500/50 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
-                  <div className="max-h-[300px] overflow-y-auto bg-[#0d1117] custom-scrollbar">
+                  <div className="max-h-[220px] overflow-y-auto bg-[#0d1117] custom-scrollbar">
                     <CodeEditor
                       value={fileContent}
                       language={filePath.split('.').pop() || "js"}
@@ -474,7 +540,7 @@ const App = () => {
                   
                   {status === 'idle' && (
                     <>
-                      <span>Commit & Push Solution</span>
+                      <span>Commit Solution <strong className='mx-1'>&</strong> README.md</span>
                       <svg className="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                       </svg>
