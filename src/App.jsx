@@ -10,7 +10,7 @@ const App = () => {
   const [repoName, setRepoName] = useState('');
   const [filePath, setFilePath] = useState('');
   const [status, setStatus] = useState('idle'); // idle | loading | success | confirming
-  
+
   const [repos, setRepos] = useState([]);
   const [leetCodeUrl, setLeetCodeUrl] = useState('');
   const [existingCode, setExistingCode] = useState('');
@@ -47,7 +47,7 @@ const App = () => {
             localStorage.setItem('githubOwner', userData.login);
           }
         }
-        
+
         const reposRes = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100', { headers });
         if (reposRes.ok) {
           const reposData = await reposRes.json();
@@ -78,16 +78,16 @@ const App = () => {
   const handleUrlChange = async (e) => {
     const url = e.target.value;
     setLeetCodeUrl(url);
-    
+
     // Attempt parsing LeetCode URL pattern: leetcode.com/problems/your-problem-slug/
     const match = url.match(/leetcode\.com\/problems\/([^/]+)/);
     if (match && match[1]) {
       const slug = match[1];
       setSlugName(slug);
-      
+
       if (!commitMessage) setCommitMessage(`added solution for ${slug}`);
       setFilePath(`${slug}/solution`);
-      
+
       // Fetch Problem Description from Alfa-Leetcode-API
       setIsFetchingDesc(true);
       try {
@@ -107,10 +107,10 @@ const App = () => {
 
   useEffect(() => {
     if (!fileContent || !filePath) return;
-    
+
     let ext = '';
     const contentToTest = fileContent.toLowerCase();
-    
+
     // Basic heuristics to determine the extension from code syntax
     if (contentToTest.includes('def ') || contentToTest.includes('class solution:')) ext = '.py';
     else if (contentToTest.includes('#include') || contentToTest.includes('using namespace std') || contentToTest.includes('public:') || contentToTest.includes('vector<')) ext = '.cpp';
@@ -118,12 +118,12 @@ const App = () => {
     else if (contentToTest.includes('function ') || contentToTest.includes('const ') || contentToTest.includes('let ')) ext = '.js';
     else if (contentToTest.includes('package main') || contentToTest.includes('func ')) ext = '.go';
     else if (contentToTest.includes('impl solution') || contentToTest.includes('fn ')) ext = '.rs';
-    
+
     if (ext) {
       const parts = filePath.split('/');
       const lastPart = parts.pop();
       const nameWithoutExt = lastPart.split('.')[0];
-      
+
       // If we don't have an extension, or the current extension is not matching our inferred one
       if (nameWithoutExt && !lastPart.endsWith(ext)) {
         parts.push(`${nameWithoutExt}${ext}`);
@@ -140,7 +140,7 @@ const App = () => {
         Accept: 'application/vnd.github+json',
         'Content-Type': 'application/json',
       };
-      
+
       // 1. Push the README.md first (if we have a slug and parsed description)
       if (slugName && questionDescription) {
         const readmePath = `${slugName}/README.md`;
@@ -150,7 +150,7 @@ const App = () => {
         };
         // Add SHA if it exists so we overwrite properly without error
         if (readmeSha) readmeBody.sha = readmeSha;
-        
+
         await fetch(
           `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${readmePath}`,
           { method: 'PUT', headers, body: JSON.stringify(readmeBody) }
@@ -174,6 +174,14 @@ const App = () => {
         setStagedSha(null);
         setExistingCode('');
         
+        // Clear the fields for the next submission
+        setLeetCodeUrl('');
+        setSlugName('');
+        setFilePath('');
+        setCommitMessage('');
+        setFileContent('');
+        setQuestionDescription('');
+
         // Minor reset to allow immediate next push
         setTimeout(() => setStatus('idle'), 3000);
       } else {
@@ -202,7 +210,7 @@ const App = () => {
 
       let codeSha = null;
       let existingText = '';
-      
+
       // Check existing Solution File
       try {
         const checkRes = await fetch(
@@ -228,7 +236,7 @@ const App = () => {
             const existingReadme = await checkReadmeRes.json();
             rSha = existingReadme.sha;
           }
-        } catch (_) {}
+        } catch (_) { }
       }
       setReadmeSha(rSha);
 
@@ -251,7 +259,7 @@ const App = () => {
     'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-stone-200 placeholder-stone-400 focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all hover:bg-white/10 backdrop-blur-sm';
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-stone-200 py-12 px-6 lg:px-12 relative overflow-hidden" data-color-mode="dark" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div className="min-h-screen -[#0a0a0a]bg text-stone-200 py-12 px-6 lg:px-12 relative overflow-hidden" data-color-mode="dark" style={{ fontFamily: "'Inter', sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
         .glass-panel {
@@ -294,7 +302,7 @@ const App = () => {
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/20 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center relative z-10 min-h-[calc(100vh-6rem)]">
-        
+
         {/* Left Column - Copy & Features */}
         <div className="lg:col-span-5 flex flex-col lg:justify-start lg:self-start lg:mt-[68px]">
           <div>
@@ -321,7 +329,7 @@ const App = () => {
             ].map((feature, i) => (
               <div key={i} className="flex gap-4 group">
                 <div className="mt-1 flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/20 transition-colors">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
                 </div>
                 <div>
                   <h3 className="text-stone-200 font-medium mb-1">{feature.title}</h3>
@@ -337,16 +345,16 @@ const App = () => {
           {status === 'confirming' ? (
             <div className="glass-panel text-white rounded-3xl p-8 lg:p-10 shadow-emerald-500/5 relative">
               <div className="absolute top-0 left-10 right-10 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent opacity-50" />
-              
+
               <h2 className="text-2xl font-semibold mb-2 text-amber-400">Solution File Exists</h2>
-              <p className="text-sm text-stone-400 mb-6">You are about to overwrite <strong className="text-stone-200">{filePath}</strong>. Please review the changes below. <br/>*(The generated README.md will update silently).*</p>
-              
+              <p className="text-sm text-stone-400 mb-6">You are about to overwrite <strong className="text-stone-200">{filePath}</strong>. Please review the changes below. <br />*(The generated README.md will update silently).*</p>
+
               <div className="rounded-xl overflow-hidden mb-8 border border-white/10 custom-scrollbar overflow-x-auto">
                 <div className="diff-viewer bg-[#0d1117] pt-4">
-                  <ReactDiffViewer 
-                    oldValue={existingCode} 
-                    newValue={fileContent} 
-                    splitView={false} 
+                  <ReactDiffViewer
+                    oldValue={existingCode}
+                    newValue={fileContent}
+                    splitView={false}
                     useDarkTheme={true}
                     leftTitle="Target Repository"
                     rightTitle="Your New Code"
@@ -362,16 +370,16 @@ const App = () => {
                   />
                 </div>
               </div>
-              
+
               <div className="flex gap-4">
-                <button 
-                  onClick={() => setStatus('idle')} 
+                <button
+                  onClick={() => setStatus('idle')}
                   className="flex-1 py-3.5 bg-white/5 border border-white/10 text-stone-300 rounded-xl hover:bg-white/10 hover:text-white transition font-medium"
                 >
                   Cancel Operation
                 </button>
-                <button 
-                  onClick={confirmPush} 
+                <button
+                  onClick={confirmPush}
                   className="flex-1 py-3.5 bg-amber-500 text-stone-900 rounded-xl hover:bg-amber-400 transition font-bold shadow-lg shadow-amber-500/20"
                 >
                   Confirm Overwrite
@@ -380,7 +388,7 @@ const App = () => {
             </div>
           ) : (
             <div className="glass-panel rounded-3xl p-8 lg:p-10 shadow-2xl relative">
-              
+
               {/* Top decorative bar */}
               <div className="absolute top-0 left-10 right-10 h-px bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50" />
 
@@ -447,12 +455,12 @@ const App = () => {
 
               <div className="mb-5 relative">
                 <label className="flex items-center justify-between text-sm font-medium text-stone-400 mb-2">
-                  <span>LeetCode URL 
+                  <span>LeetCode URL
                     {isFetchingDesc ? (
                       <span className="ml-2 text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)] px-2 py-0.5 rounded tracking-wide uppercase animate-pulse">Extracting Problem...</span>
                     ) : (questionDescription ? (
                       <span className="ml-2 text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded tracking-wide uppercase">Question Prepped!</span>
-                     ) : (
+                    ) : (
                       <span className="ml-2 text-[10px] bg-white/10 px-2 py-0.5 rounded text-stone-300">Auto-fills</span>
                     ))}
                   </span>
@@ -468,7 +476,10 @@ const App = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
                 <div className="sm:col-span-1">
-                  <label className="block text-sm font-medium text-stone-400 mb-2">Code File Path</label>
+                  <label className="flex items-center justify-between text-sm font-medium text-stone-400 mb-2">
+                    <span>Code File Path</span>
+                    <span title="File extension is automatically added based on the pasted code" className="ml-2 text-[10px] bg-white/5 text-stone-400 border border-white/10 px-2 py-0.5 rounded tracking-wide uppercase">Extension Auto-Added</span>
+                  </label>
                   <input
                     type="text"
                     placeholder="two-sum.js"
@@ -508,7 +519,7 @@ const App = () => {
                       }}
                     />
                   </div>
-                  
+
                   {/* Simulated IDE dots */}
                   <div className="absolute top-4 right-4 flex gap-1.5 opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none">
                     <div className="w-2.5 h-2.5 rounded-full bg-stone-500"></div>
@@ -522,8 +533,8 @@ const App = () => {
                 onClick={handlePushClick}
                 disabled={status === 'loading'}
                 className={`w-full group relative overflow-hidden rounded-xl font-medium text-sm py-4 transition-all duration-300
-                  ${status === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' 
-                  : 'bg-white text-black hover:bg-stone-200 active:scale-[0.98]'}
+                  ${status === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                    : 'bg-white text-black hover:bg-stone-200 active:scale-[0.98]'}
                   ${status === 'loading' && 'opacity-70 cursor-wait'}
                 `}
               >
@@ -535,9 +546,9 @@ const App = () => {
                     </svg>
                   )}
                   {status === 'loading' && 'Syncing...'}
-                  
+
                   {status === 'success' && '✓ Synced Successfully!'}
-                  
+
                   {status === 'idle' && (
                     <>
                       <span>Commit Solution <strong className='mx-1'>&</strong> README.md</span>
@@ -553,7 +564,7 @@ const App = () => {
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none" />
                 )}
               </button>
-              
+
             </div>
           )}
         </div>
