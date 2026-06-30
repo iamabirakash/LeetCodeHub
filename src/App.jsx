@@ -171,8 +171,6 @@ const App = () => {
    * Updates the Topics index counts after insertion.
    */
   const buildUpdatedRootReadme = (existingContent, { slug, title, tags, owner }) => {
-    const newEntry = `- [${title}](${slug}/)`;
-
     // Helper: convert tag name to a GitHub-style anchor (lowercase, spaces → hyphens)
     const toAnchor = (tag) => tag.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
 
@@ -184,7 +182,7 @@ const App = () => {
       }
       content += '\n---\n';
       for (const tag of tags) {
-        content += `\n## ${tag}\n${newEntry}\n`;
+        content += `\n## ${tag}\n1. [${title}](${slug}/)\n`;
       }
       return content;
     }
@@ -206,7 +204,7 @@ const App = () => {
           const trimmed = lines[listEnd].trim();
           // Stop if we hit another section header or a horizontal rule followed by a header
           if (trimmed.startsWith('## ') || trimmed === '---') break;
-          if (trimmed.startsWith('- ')) {
+          if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || /^\d+\.\s/.test(trimmed)) {
             itemCount++;
             if (trimmed.includes(`(${slug}/)`)) {
               hasDuplicate = true;
@@ -217,13 +215,14 @@ const App = () => {
 
         if (!hasDuplicate) {
           // Insert new entry at the end of this section's list
+          const newEntry = `${itemCount + 1}. [${title}](${slug}/)`;
           lines.splice(listEnd, 0, newEntry);
           itemCount++;
         }
 
         // Update the count in the Topics index for this tag
         const anchor = toAnchor(tag);
-        const topicsEntryRegex = new RegExp(`^(\\s*-\\s*\\[${tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\(#${anchor}\\))\\s*\\(\\d+\\)`, 'i');
+        const topicsEntryRegex = new RegExp(`^(\\s*-\\s*\\[${tag.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\]\\(#${anchor}\\))\\s*\\(\\d+\\)`, 'i');
         for (let i = 0; i < lines.length; i++) {
           if (topicsEntryRegex.test(lines[i])) {
             lines[i] = lines[i].replace(/\(\d+\)/, `(${itemCount})`);
@@ -232,6 +231,7 @@ const App = () => {
         }
       } else {
         // Section doesn't exist — append at the end
+        const newEntry = `1. [${title}](${slug}/)`;
         lines.push('', sectionHeader, newEntry);
 
         // Also add to the Topics index
