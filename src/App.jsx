@@ -22,6 +22,12 @@ const App = () => {
   const [isFetchingDesc, setIsFetchingDesc] = useState(false);
   const [readmeSha, setReadmeSha] = useState(null);
 
+  // States for root README.md update with topic tags
+  const [topicTags, setTopicTags] = useState([]);
+  const [questionNumber, setQuestionNumber] = useState('');
+  const [questionTitle, setQuestionTitle] = useState('');
+  const [rootReadmeSha, setRootReadmeSha] = useState(null);
+
   useEffect(() => {
     const savedToken = localStorage.getItem('githubToken');
     const savedOwner = localStorage.getItem('githubOwner');
@@ -95,11 +101,26 @@ const App = () => {
         if (res.ok) {
           const data = await res.json();
           setQuestionDescription(`<h2><a href="${url}">${slug}</a></h2>\n\n${data.question || data.content || "*Description missing*"}`);
+
+          // Capture topic tags and problem metadata for root README.md
+          if (data.topicTags && Array.isArray(data.topicTags)) {
+            setTopicTags(data.topicTags.map(t => t.name || t.slug));
+          } else {
+            setTopicTags([]);
+          }
+          setQuestionNumber(data.questionFrontendId || data.questionId || '');
+          setQuestionTitle(data.questionTitle || slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
         } else {
           setQuestionDescription(`# ${slug}\n\n**Problem Link:** ${url}\n\n*API limit reached. Failed to fetch full description automatically.*`);
+          setTopicTags([]);
+          setQuestionNumber('');
+          setQuestionTitle(slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
         }
       } catch (err) {
         setQuestionDescription(`# ${slug}\n\n**Problem Link:** ${url}\n\n*Failed to fetch description.*`);
+        setTopicTags([]);
+        setQuestionNumber('');
+        setQuestionTitle(slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
       }
       setIsFetchingDesc(false);
     }
@@ -131,6 +152,105 @@ const App = () => {
       }
     }
   }, [fileContent, filePath]);
+
+  /**
+   * Parses an existing root README.md and inserts a new problem entry under each
+   * of its topic-tag sections. Uses the list-based format:
+   *
+   *   ## Topics
+   *   - [Array](#array) (3)
+   *   - [Hash Table](#hash-table) (1)
+   *
+   *   ---
+   *
+   *   ## Array
+   *   - [Two Sum](two-sum/)
+   *   - [Three Sum](3sum/)
+   *
+   * Deduplicates by checking if the slug already appears in each section.
+   * Updates the Topics index counts after insertion.
+   */
+  const buildUpdatedRootReadme = (existingContent, { slug, title, tags, owner }) => {
+    const newEntry = `- [${title}](${slug}/)`;
+
+    // Helper: convert tag name to a GitHub-style anchor (lowercase, spaces → hyphens)
+    const toAnchor = (tag) => tag.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+
+    // ── Create from scratch if the README doesn't exist ──
+    if (!existingContent || !existingContent.trim()) {
+      let content = `# Leetcode\n${owner}\n\nA topic-wise index of the solution folders in this repository. Some problems appear in multiple sections when they naturally fit more than one pattern.\n\n## Topics\n`;
+      for (const tag of tags) {
+        content += `- [${tag}](#${toAnchor(tag)}) (1)\n`;
+      }
+      content += '\n---\n';
+      for (const tag of tags) {
+        content += `\n## ${tag}\n${newEntry}\n`;
+      }
+      return content;
+    }
+
+    // ── Parse and update the existing README ──
+    let lines = existingContent.split('\n');
+
+    for (const tag of tags) {
+      const sectionHeader = `## ${tag}`;
+      const sectionIndex = lines.findIndex(l => l.trim() === sectionHeader);
+
+      if (sectionIndex !== -1) {
+        // Section exists — find the end of the list and check for duplicates
+        let listEnd = sectionIndex + 1;
+        let hasDuplicate = false;
+        let itemCount = 0;
+
+        while (listEnd < lines.length) {
+          const trimmed = lines[listEnd].trim();
+          // Stop if we hit another section header or a horizontal rule followed by a header
+          if (trimmed.startsWith('## ') || trimmed === '---') break;
+          if (trimmed.startsWith('- ')) {
+            itemCount++;
+            if (trimmed.includes(`(${slug}/)`)) {
+              hasDuplicate = true;
+            }
+          }
+          listEnd++;
+        }
+
+        if (!hasDuplicate) {
+          // Insert new entry at the end of this section's list
+          lines.splice(listEnd, 0, newEntry);
+          itemCount++;
+        }
+
+        // Update the count in the Topics index for this tag
+        const anchor = toAnchor(tag);
+        const topicsEntryRegex = new RegExp(`^(\\s*-\\s*\\[${tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\(#${anchor}\\))\\s*\\(\\d+\\)`, 'i');
+        for (let i = 0; i < lines.length; i++) {
+          if (topicsEntryRegex.test(lines[i])) {
+            lines[i] = lines[i].replace(/\(\d+\)/, `(${itemCount})`);
+            break;
+          }
+        }
+      } else {
+        // Section doesn't exist — append at the end
+        lines.push('', sectionHeader, newEntry);
+
+        // Also add to the Topics index
+        const topicsHeaderIdx = lines.findIndex(l => l.trim() === '## Topics');
+        if (topicsHeaderIdx !== -1) {
+          // Find the end of the Topics list
+          let topicsEnd = topicsHeaderIdx + 1;
+          while (topicsEnd < lines.length) {
+            const trimmed = lines[topicsEnd].trim();
+            if (trimmed === '' || trimmed === '---' || trimmed.startsWith('## ')) break;
+            topicsEnd++;
+          }
+          lines.splice(topicsEnd, 0, `- [${tag}](#${toAnchor(tag)}) (1)`);
+        }
+      }
+    }
+
+    return lines.join('\n');
+  };
 
   const confirmPush = async () => {
     setStatus('loading');
@@ -170,6 +290,48 @@ const App = () => {
       );
 
       if (res.ok) {
+        // 3. Update the root README.md with topic-tagged problem links
+        if (slugName && topicTags.length > 0) {
+          try {
+            let existingRootReadme = '';
+            let currentRootSha = rootReadmeSha;
+
+            // Fetch latest root README.md (in case SHA changed from prior commits)
+            try {
+              const rootReadmeRes = await fetch(
+                `https://api.github.com/repos/${repoOwner}/${repoName}/contents/README.md`,
+                { headers }
+              );
+              if (rootReadmeRes.ok) {
+                const rootReadmeData = await rootReadmeRes.json();
+                currentRootSha = rootReadmeData.sha;
+                existingRootReadme = decodeURIComponent(escape(atob(rootReadmeData.content)));
+              }
+            } catch (_) { }
+
+            const updatedRootReadme = buildUpdatedRootReadme(existingRootReadme, {
+              slug: slugName,
+              title: questionTitle,
+              tags: topicTags,
+              owner: repoOwner,
+            });
+
+            const rootReadmeBody = {
+              message: `docs: update README with ${slugName}`,
+              content: btoa(unescape(encodeURIComponent(updatedRootReadme))),
+            };
+            if (currentRootSha) rootReadmeBody.sha = currentRootSha;
+
+            await fetch(
+              `https://api.github.com/repos/${repoOwner}/${repoName}/contents/README.md`,
+              { method: 'PUT', headers, body: JSON.stringify(rootReadmeBody) }
+            );
+          } catch (rootErr) {
+            console.error('Failed to update root README.md:', rootErr);
+            // Non-blocking — solution and per-problem README already pushed successfully
+          }
+        }
+
         setStatus('success');
         setStagedSha(null);
         setExistingCode('');
@@ -181,6 +343,10 @@ const App = () => {
         setCommitMessage('');
         setFileContent('');
         setQuestionDescription('');
+        setTopicTags([]);
+        setQuestionNumber('');
+        setQuestionTitle('');
+        setRootReadmeSha(null);
 
         // Minor reset to allow immediate next push
         setTimeout(() => setStatus('idle'), 3000);
@@ -239,6 +405,20 @@ const App = () => {
         } catch (_) { }
       }
       setReadmeSha(rSha);
+
+      // Check existing root README.md to grab its SHA
+      let rootRSha = null;
+      try {
+        const checkRootReadmeRes = await fetch(
+          `https://api.github.com/repos/${repoOwner}/${repoName}/contents/README.md`,
+          { headers }
+        );
+        if (checkRootReadmeRes.ok) {
+          const existingRootReadme = await checkRootReadmeRes.json();
+          rootRSha = existingRootReadme.sha;
+        }
+      } catch (_) { }
+      setRootReadmeSha(rootRSha);
 
       // Trigger Diff Viewer if Code File exists
       if (codeSha) {
@@ -472,6 +652,19 @@ const App = () => {
                   onChange={handleUrlChange}
                   className={inputClass}
                 />
+                {/* Topic tag badges */}
+                {topicTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2.5">
+                    {topicTags.map((tag, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-medium tracking-wide bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/20 transition-colors"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
