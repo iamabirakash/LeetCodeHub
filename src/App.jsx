@@ -97,7 +97,7 @@ const App = () => {
       // Fetch Problem Description from Alfa-Leetcode-API
       setIsFetchingDesc(true);
       try {
-        const res = await fetch(`https://alfa-leetcode-api.onrender.com/select?titleSlug=${slug}`);
+        const res = await fetch(`https://leetcodehub-api.onrender.com/select?titleSlug=${slug}`);
         if (res.ok) {
           const data = await res.json();
           setQuestionDescription(`<h2><a href="${url}">${slug}</a></h2>\n\n${data.question || data.content || "*Description missing*"}`);
