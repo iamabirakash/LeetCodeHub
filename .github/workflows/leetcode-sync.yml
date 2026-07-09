@@ -1,0 +1,44 @@
+name: LeetCode Sync
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # Runs every 30 minutes
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+permissions:
+  contents: write # Needed to push commits back to the repo
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Get full history
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install Dependencies
+      working-directory: ./sync
+      run: npm install
+
+    - name: Run LeetCode Sync Script
+      env:
+        LEETCODE_SESSION: ${{ secrets.LEETCODE_SESSION }}
+        GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+      run: npm run sync
+      working-directory: ./sync
+
+    - name: Commit and Push Changes
+      run: |
+        git config --global user.name "LeetCode Sync Bot"
+        git config --global user.email "bot@leetcode-sync.local"
+        git add -A
+        # Commit only if there are changes
+        git commit -m "Auto-sync LeetCode submissions" || exit 0
+        git push
