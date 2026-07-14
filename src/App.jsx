@@ -139,6 +139,7 @@ const App = () => {
     else if (contentToTest.includes('function ') || contentToTest.includes('const ') || contentToTest.includes('let ')) ext = '.js';
     else if (contentToTest.includes('package main') || contentToTest.includes('func ')) ext = '.go';
     else if (contentToTest.includes('impl solution') || contentToTest.includes('fn ')) ext = '.rs';
+    else if (/\b(select|with|insert\s+into|update|delete\s+from|create\s+table)\b/.test(contentToTest)) ext = '.sql';
 
     if (ext) {
       const parts = filePath.split('/');

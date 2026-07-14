@@ -166,6 +166,13 @@ const getExtension = (langName) => {
     'rust': 'rs',
     'c': 'c',
     'csharp': 'cs',
+    'sql': 'sql',
+    'mysql': 'sql',
+    'postgresql': 'sql',
+    'mssql': 'sql',
+    'ms sql server': 'sql',
+    'oracle': 'sql',
+    'oracle sql': 'sql',
   };
   return map[langName.toLowerCase()] || 'txt';
 };
